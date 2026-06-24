@@ -4,11 +4,6 @@ A macOS background plugin that intercepts every screenshot and asks one question
 
 It does **not** call any AI CLI — you drag/paste the file into Claude / Codex / ChatGPT yourself during the TTL window. The plugin's only job is the prompt and the auto-delete timer.
 
-Ships with two ways to use it:
-
-- **Background watcher** (`screenshot-ai.sh` + `install.sh`) — intercepts *every* OS screenshot system-wide.
-- **Claude Code slash command** (`commands/screenshot.md`) — type `/screenshot` in any Claude Code session to capture a region, load it straight into the conversation, and auto-delete it 5 min later. See [Claude Code slash command](#claude-code-slash-command) below.
-
 ## How it works
 
 1. On install, `defaults write com.apple.screencapture location` redirects screenshots from `~/Desktop` to a hidden staging folder (`~/.screenshot-ai/pending`).
@@ -49,18 +44,6 @@ The dialog has two buttons:
 - **Keep** — behaves like a normal screenshot. File stays on the Desktop until you delete it.
 - **Yes — auto-delete** *(default)* — file stays on the Desktop long enough for you to drag/paste it into your AI tool, then is removed automatically after `SCREENSHOT_AI_TTL` seconds (default 300 = 5 min).
 
-## Claude Code slash command
-
-`commands/screenshot.md` is a [Claude Code](https://claude.com/claude-code) slash command — same idea as the watcher, but invoked on demand from inside a chat instead of intercepting every OS screenshot. Type `/screenshot` (optionally with a question, e.g. `/screenshot what's wrong with this error?`) and it captures a region (same UI as ⌘⇧4), loads the PNG into the conversation so Claude can see it, and schedules a 5-minute auto-delete.
-
-Install it for all your Claude Code sessions:
-
-```bash
-cp commands/screenshot.md ~/.claude/commands/screenshot.md
-```
-
-Captures land in `~/.claude/screenshots/` and self-delete after 5 minutes. macOS only; needs Screen Recording permission on first run.
-
 ## Files
 
 | Path | Purpose |
@@ -70,7 +53,6 @@ Captures land in `~/.claude/screenshots/` and self-delete after 5 minutes. macOS
 | `~/.screenshot-ai/stdout.log`, `stderr.log` | LaunchAgent logs |
 | `~/Library/LaunchAgents/io.local.screenshot-ai.plist` | LaunchAgent definition |
 | `~/Desktop/Screen Shot *.png` | Final landing spot for both Keep and auto-delete paths |
-| `commands/screenshot.md` | Claude Code `/screenshot` slash command (copy to `~/.claude/commands/`) |
 
 ## Uninstall
 
@@ -78,7 +60,7 @@ Captures land in `~/.claude/screenshots/` and self-delete after 5 minutes. macOS
 ./uninstall.sh
 ```
 
-Restores the default screenshot location and removes the LaunchAgent. Leaves logs in `~/.screenshot-ai/`; `rm -rf ~/.screenshot-ai` for a clean wipe. The slash command is removed with `rm ~/.claude/commands/screenshot.md`.
+Restores the default screenshot location and removes the LaunchAgent. Leaves logs in `~/.screenshot-ai/`; `rm -rf ~/.screenshot-ai` for a clean wipe.
 
 ## Customisation
 
