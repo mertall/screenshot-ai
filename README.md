@@ -89,14 +89,6 @@ Other tweaks:
 - **Screenshots still hit ~/Desktop.** `SystemUIServer` didn't pick up the new default. `killall SystemUIServer` and try again, or log out / back in.
 - **Dialog shows on a half-written capture.** Bump `SCREENSHOT_AI_SETTLE_MS` in the plist environment block.
 
-## How it was built
+## License
 
-This was built and iterated with [Claude Code](https://claude.com/claude-code), starting from a rough idea ("intercept screenshots, ask if they're for AI, auto-delete") and refined through real use. A few of the problems that shaped the final design — recorded here because they're the non-obvious parts:
-
-- **Latency, take 1 — the dialog icon.** The first version passed the screenshot itself as the dialog icon (`with icon <image>`). macOS decodes and scales the full-resolution Retina PNG every time, which measured **~2.5s** of lag per prompt. Switched to a stock `note` icon; the filename is still shown in the dialog text.
-- **Latency, take 2 — the real culprit.** Even after that, the dialog felt slow. The cause wasn't the watcher at all: macOS's **floating thumbnail preview** holds a screenshot in memory and only writes the file to disk after the preview dismisses (~5s). The installer now disables it (`defaults write com.apple.screencapture show-thumbnail -bool false`), and uninstall restores it.
-- **Auto-deletes that didn't fire.** The original timer was a detached `sleep $TTL && rm` process. But it's a child of the `launchd` job, so every reload (or reboot) killed the whole process group and the pending deletes with it — screenshots lingered. Replaced with the on-disk `deletes.tsv` schedule swept on each poll tick, which survives reloads, logout, and reboots.
-- **Racing macOS's temp file.** During capture, macOS writes a hidden `.Screenshot ….png` and then renames it to the final name. The watcher was grabbing the dotfile mid-write and erroring. It now skips hidden files.
-- **Bash → Rust.** It started as a single bash `launchd` watcher (zero toolchain, nothing to compile). It was later rewritten as a pure-std Rust binary — still no external crates, still polling — for a typed, testable core (`cargo test` covers the move/dedup, settle, and full auto-delete pipeline).
-
-The trade-off of the Rust port is explicit: you now need `cargo` to build, where the bash version needed nothing. The runtime is dependency-free either way.
+MIT — see [LICENSE](LICENSE).
