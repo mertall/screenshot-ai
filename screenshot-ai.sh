@@ -22,21 +22,6 @@ log() {
     printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >&2
 }
 
-# Recover any files left in the 'claimed' state from a previous watcher run
-# (e.g. crash or launchctl reload while a dialog was open). Strip the suffix
-# so they re-enter the queue on the next poll.
-recover_orphans() {
-    local claimed
-    shopt -s nullglob
-    for claimed in "$PENDING_DIR"/*.claimed; do
-        local restored="${claimed%.claimed}"
-        if [ ! -e "$restored" ]; then
-            mv "$claimed" "$restored" 2>/dev/null && log "Recovered orphan: $(basename "$restored")"
-        fi
-    done
-    shopt -u nullglob
-}
-
 # Wait for the file to stop growing before we prompt or move it.
 wait_for_settle() {
     local path="$1"
@@ -110,19 +95,19 @@ schedule_delete() {
     disown 2>/dev/null || true
 }
 
-# $1 = claimed path (with .claimed suffix), $2 = original filename
+# $1 = path in pending dir, $2 = original filename
 handle_screenshot() {
-    local claimed="$1"
+    local src="$1"
     local original_name="$2"
 
-    wait_for_settle "$claimed"
+    wait_for_settle "$src"
 
     local choice
-    choice=$(prompt_user "$claimed" "$original_name")
+    choice=$(prompt_user "$src" "$original_name")
 
     local final
-    if ! final=$(relocate_unique "$claimed" "$KEEP_DIR" "$original_name"); then
-        log "Failed to move $claimed into $KEEP_DIR"
+    if ! final=$(relocate_unique "$src" "$KEEP_DIR" "$original_name"); then
+        log "Failed to move $src into $KEEP_DIR"
         return
     fi
 
@@ -139,25 +124,22 @@ handle_screenshot() {
     esac
 }
 
-recover_orphans
-log "screenshot-ai watching $PENDING_DIR (keep dir: $KEEP_DIR, ttl: ${TTL_SECONDS}s)"
-
-while true; do
-    shopt -s nullglob
-    # No brace expansion — list each extension explicitly so bash 3.2 doesn't
-    # do anything surprising with the empty-glob cases.
-    for f in "$PENDING_DIR"/*.png "$PENDING_DIR"/*.PNG \
-             "$PENDING_DIR"/*.jpg "$PENDING_DIR"/*.JPG \
-             "$PENDING_DIR"/*.jpeg "$PENDING_DIR"/*.JPEG \
-             "$PENDING_DIR"/*.heic "$PENDING_DIR"/*.HEIC; do
-        original_name=$(basename "$f")
-        claimed="${f}.claimed"
-        # Atomically claim the file by renaming. If mv fails (e.g. another
-        # iteration of the loop already grabbed it), skip silently.
-        if mv "$f" "$claimed" 2>/dev/null; then
-            handle_screenshot "$claimed" "$original_name"
-        fi
+# Single sequential watcher: the dialog inside handle_screenshot blocks the
+# loop, so a file is only ever processed once — no claim/lock needed.
+watch_loop() {
+    log "screenshot-ai watching $PENDING_DIR (keep dir: $KEEP_DIR, ttl: ${TTL_SECONDS}s)"
+    while true; do
+        shopt -s nullglob
+        for f in "$PENDING_DIR"/*.png "$PENDING_DIR"/*.jpg; do
+            handle_screenshot "$f" "$(basename "$f")"
+        done
+        shopt -u nullglob
+        sleep "$POLL_INTERVAL"
     done
-    shopt -u nullglob
-    sleep "$POLL_INTERVAL"
-done
+}
+
+# Only start watching when executed directly. When sourced (e.g. by the e2e
+# tests) the functions load but the loop doesn't run.
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+    watch_loop
+fi
