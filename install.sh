@@ -6,13 +6,17 @@ BASE_DIR="$HOME/.screenshot-ai"
 BIN_DIR="$BASE_DIR/bin"
 PENDING_DIR="$BASE_DIR/pending"
 PLIST="$HOME/Library/LaunchAgents/io.local.screenshot-ai.plist"
-WATCHER_SRC="$SCRIPT_DIR/screenshot-ai.sh"
-WATCHER_DST="$BIN_DIR/screenshot-ai.sh"
+WATCHER_DST="$BIN_DIR/screenshot-ai"
 
 mkdir -p "$BIN_DIR" "$PENDING_DIR"
 
-echo "==> Installing watcher script..."
-cp "$WATCHER_SRC" "$WATCHER_DST"
+command -v cargo >/dev/null || { echo "ERROR: cargo not found. Install Rust: https://rustup.rs"; exit 1; }
+
+echo "==> Building release binary..."
+cargo build --release --manifest-path "$SCRIPT_DIR/Cargo.toml"
+
+echo "==> Installing watcher binary..."
+cp "$SCRIPT_DIR/target/release/screenshot-ai" "$WATCHER_DST"
 chmod +x "$WATCHER_DST"
 
 echo "==> Redirecting macOS screenshot location to $PENDING_DIR..."
@@ -20,8 +24,7 @@ defaults write com.apple.screencapture location "$PENDING_DIR"
 defaults write com.apple.screencapture type png
 killall SystemUIServer
 
-# The watcher only calls stock tools (osascript, stat, mv, rm, sleep) — a
-# minimal system PATH is all the LaunchAgent needs.
+# The binary only shells out to osascript / sh / rm — a minimal PATH suffices.
 RUNTIME_PATH="/usr/bin:/bin:/usr/sbin"
 
 echo "==> Writing LaunchAgent at $PLIST..."
@@ -35,7 +38,6 @@ cat > "$PLIST" <<EOF
     <string>io.local.screenshot-ai</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/bin/bash</string>
         <string>$WATCHER_DST</string>
     </array>
     <key>EnvironmentVariables</key>

@@ -1,0 +1,14 @@
+[package]
+name = "screenshot-ai"
+version = "0.1.0"
+edition = "2021"
+description = "macOS screenshot interceptor: prompt 'Using this for AI?' and auto-delete"
+
+[[bin]]
+name = "screenshot-ai"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true
