@@ -15,6 +15,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 struct Config {
+    base_dir: PathBuf,
     pending_dir: PathBuf,
     keep_dir: PathBuf,
     ttl_secs: u64,
@@ -35,6 +36,7 @@ impl Config {
         let base = home().join(".screenshot-ai");
         Config {
             pending_dir: base.join("pending"),
+            base_dir: base.clone(),
             keep_dir: env::var("SCREENSHOT_AI_KEEP_DIR")
                 .map(PathBuf::from)
                 .unwrap_or_else(|_| home().join("Desktop")),
@@ -46,6 +48,13 @@ impl Config {
 }
 
 fn is_image(path: &Path) -> bool {
+    // Skip hidden files: macOS writes a temp ".Screenshot ….png" during capture
+    // and renames it to the final name — grabbing the dotfile races the rename.
+    match path.file_name().and_then(|n| n.to_str()) {
+        Some(name) if name.starts_with('.') => return false,
+        None => return false,
+        _ => {}
+    }
     match path.extension().and_then(|e| e.to_str()) {
         Some(ext) => {
             let e = ext.to_ascii_lowercase();
@@ -146,13 +155,66 @@ fn notify(msg: &str) {
         .spawn();
 }
 
-/// Detached sleep+rm so the timer survives this process restarting.
-fn schedule_delete(path: &Path, ttl_secs: u64) {
-    let esc = path.to_string_lossy().replace('"', "\\\"");
-    let _ = Command::new("/bin/sh")
-        .arg("-c")
-        .arg(format!("sleep {ttl_secs} && rm -f \"{esc}\""))
-        .spawn();
+fn now_unix() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+fn deletes_file(cfg: &Config) -> PathBuf {
+    cfg.base_dir.join("deletes.tsv")
+}
+
+/// Record a file to delete at `now + ttl`. Persisted to disk so the timer
+/// survives watcher reloads, reboots, and logout — the sweep below honours it
+/// whenever the watcher next runs. (A spawned `sleep && rm` would be a child of
+/// the launchd job and get killed on every reload.)
+fn mark_for_delete(cfg: &Config, path: &Path) {
+    use std::io::Write;
+    let line = format!("{}\t{}\n", now_unix() + cfg.ttl_secs, path.to_string_lossy());
+    if let Ok(mut f) = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(deletes_file(cfg))
+    {
+        let _ = f.write_all(line.as_bytes());
+    }
+}
+
+/// Delete any recorded file whose time has come (or that's already gone) and
+/// rewrite the state file with what's left. Called every poll tick.
+fn sweep_deletes(cfg: &Config) {
+    let df = deletes_file(cfg);
+    let content = match fs::read_to_string(&df) {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+    let now = now_unix();
+    let mut remaining = String::new();
+    let mut changed = false;
+    for line in content.lines() {
+        let mut parts = line.splitn(2, '\t');
+        let when: Option<u64> = parts.next().and_then(|s| s.parse().ok());
+        let path = parts.next();
+        match (when, path) {
+            (Some(when), Some(path)) if Path::new(path).exists() => {
+                if now >= when {
+                    let _ = fs::remove_file(path);
+                    eprintln!("auto-deleted: {path}");
+                    changed = true;
+                } else {
+                    remaining.push_str(line);
+                    remaining.push('\n');
+                }
+            }
+            // malformed entry, or the file is already gone — drop it
+            _ => changed = true,
+        }
+    }
+    if changed {
+        let _ = fs::write(&df, remaining);
+    }
 }
 
 fn handle_screenshot(cfg: &Config, src: &Path) {
@@ -172,7 +234,7 @@ fn handle_screenshot(cfg: &Config, src: &Path) {
     };
 
     if choice == "Yes — auto-delete" {
-        schedule_delete(&final_path, cfg.ttl_secs);
+        mark_for_delete(cfg, &final_path);
         notify(&format!("Auto-delete in {} min: {name}", cfg.ttl_secs / 60));
         eprintln!(
             "AI mode: {} will be deleted in {}s",
@@ -193,6 +255,7 @@ fn main() {
     // Single sequential watcher: the blocking dialog inside handle_screenshot
     // means a file is only ever processed once — no claim/lock needed.
     loop {
+        sweep_deletes(&cfg);
         if let Ok(entries) = fs::read_dir(&cfg.pending_dir) {
             let mut files: Vec<PathBuf> = entries
                 .flatten()
@@ -227,6 +290,8 @@ mod tests {
         assert!(is_image(Path::new("/x/a.jpg")));
         assert!(!is_image(Path::new("/x/a.heic")));
         assert!(!is_image(Path::new("/x/a")));
+        // macOS's mid-capture temp dotfile must be ignored
+        assert!(!is_image(Path::new("/x/.Screenshot 2026.png")));
     }
 
     #[test]
@@ -271,6 +336,7 @@ mod tests {
         fs::create_dir_all(&stage).unwrap();
 
         let cfg = Config {
+            base_dir: dir.clone(),
             pending_dir: stage.clone(),
             keep_dir: keep.clone(),
             ttl_secs: 1,
@@ -288,7 +354,11 @@ mod tests {
         assert!(landed.exists(), "should land in keep dir");
         assert!(!src.exists(), "should leave staging");
 
-        thread::sleep(Duration::from_millis(1800)); // ttl 1s + buffer
+        // Not yet due → sweep keeps it; after the TTL passes → sweep deletes it.
+        sweep_deletes(&cfg);
+        assert!(landed.exists(), "should survive before ttl");
+        thread::sleep(Duration::from_millis(1200)); // ttl 1s + buffer
+        sweep_deletes(&cfg);
         assert!(!landed.exists(), "should auto-delete after ttl");
 
         fs::remove_dir_all(&dir).ok();
