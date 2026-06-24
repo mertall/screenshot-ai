@@ -7,8 +7,9 @@ echo "==> Unloading LaunchAgent..."
 launchctl unload "$PLIST" 2>/dev/null || true
 rm -f "$PLIST"
 
-echo "==> Restoring default screenshot location..."
+echo "==> Restoring default screenshot location and thumbnail preview..."
 defaults delete com.apple.screencapture location 2>/dev/null || true
+defaults delete com.apple.screencapture show-thumbnail 2>/dev/null || true
 killall SystemUIServer 2>/dev/null || true
 
 echo ""

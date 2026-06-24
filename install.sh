@@ -22,6 +22,10 @@ chmod +x "$WATCHER_DST"
 echo "==> Redirecting macOS screenshot location to $PENDING_DIR..."
 defaults write com.apple.screencapture location "$PENDING_DIR"
 defaults write com.apple.screencapture type png
+# Disable the floating thumbnail preview: with it on, screencapture holds the
+# image in memory and only writes the file ~5s later, so the dialog can't fire
+# until then. Off = file lands on disk immediately.
+defaults write com.apple.screencapture show-thumbnail -bool false
 killall SystemUIServer
 
 # The binary only shells out to osascript / sh / rm — a minimal PATH suffices.
