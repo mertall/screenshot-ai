@@ -79,7 +79,7 @@ Then the dialog: 👇
 
 When you pick **Auto-delete**, a small thumbnail of the screenshot sticks to your mouse pointer and follows it around — no button held. Move it wherever you want to use it and **click once** to drop it in (it copies the image to the clipboard and sends ⌘V into whatever you clicked), or press **Esc** to dismiss without pasting.
 
-This part is a tiny native Swift helper (`cursorpaste.swift`, built to `~/.screenshot-ai/bin/cursorpaste` by `install.sh`). It's **optional** — if Swift isn't available or the build fails, Keep/Auto-delete still work, you just don't get the floating paste.
+This part is a tiny native Swift helper (`cursorpaste.swift`, built to `~/.screenshot-ai/bin/cursorpaste` by `install.sh`). It's **optional** — if Swift isn't available or the build fails, Keep/Auto-delete still work, you just don't get the floating paste. To rebuild only the helper (after editing it or fixing your toolchain), run `./build-helper.sh`.
 
 > 🔐 First time you use it, macOS will ask to grant **Accessibility** permission (needed to watch for the click/Esc and to send ⌘V). Approve it in System Settings → Privacy & Security → Accessibility.
 
