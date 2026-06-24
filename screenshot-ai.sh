@@ -39,19 +39,18 @@ wait_for_settle() {
 }
 
 prompt_user() {
-    local path="$1"
-    local display_name="$2"
-    local esc_path="${path//\"/\\\"}"
+    local display_name="$1"
     local esc_name="${display_name//\"/\\\"}"
     local minutes=$(( TTL_SECONDS / 60 ))
     # Route the dialog through System Events so it surfaces to the user
     # even when invoked from a non-foreground LaunchAgent context.
+    # NOTE: no "with icon" — using the raw screenshot as the icon forces macOS
+    # to decode/scale a multi-MB Retina PNG, which adds ~2.5s of lag per shot.
     osascript <<EOF 2>>"$BASE_DIR/stderr.log"
 tell application "System Events"
     activate
     try
-        set imgFile to POSIX file "$esc_path"
-        set theDialog to (display dialog "Screenshot: $esc_name" & return & return & "Using this for AI?" & return & "(If yes, it will auto-delete in $minutes min.)" buttons {"Keep", "Yes — auto-delete"} default button "Yes — auto-delete" with title "Screenshot AI" with icon imgFile giving up after 600)
+        set theDialog to (display dialog "Screenshot: $esc_name" & return & return & "Using this for AI?" & return & "(If yes, it will auto-delete in $minutes min.)" buttons {"Keep", "Yes — auto-delete"} default button "Yes — auto-delete" with title "Screenshot AI" with icon note giving up after 600)
         return button returned of theDialog
     on error errMsg
         log "dialog error: " & errMsg
@@ -103,7 +102,7 @@ handle_screenshot() {
     wait_for_settle "$src"
 
     local choice
-    choice=$(prompt_user "$src" "$original_name")
+    choice=$(prompt_user "$original_name")
 
     local final
     if ! final=$(relocate_unique "$src" "$KEEP_DIR" "$original_name"); then
