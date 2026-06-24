@@ -11,6 +11,7 @@ BASE_DIR="$HOME/.screenshot-ai"
 PENDING_DIR="$BASE_DIR/pending"
 KEEP_DIR="${SCREENSHOT_AI_KEEP_DIR:-$HOME/Desktop}"
 DELETES_FILE="$BASE_DIR/deletes.tsv"
+HELPER_BIN="$BASE_DIR/bin/cursorpaste"
 TTL_SECONDS="${SCREENSHOT_AI_TTL:-300}"        # 5 minutes
 POLL_INTERVAL="${SCREENSHOT_AI_POLL:-0.1}"
 SETTLE_WAIT="${SCREENSHOT_AI_SETTLE:-0.08}"
@@ -130,6 +131,11 @@ handle_screenshot() {
     fi
 
     if [ "$choice" = "Auto-delete" ]; then
+        # Float the screenshot on the cursor — click to paste it into your AI
+        # tool, Esc to skip. Only if the Swift helper is built; harmless without.
+        if [ -x "$HELPER_BIN" ]; then
+            "$HELPER_BIN" "$final" >/dev/null 2>>"$BASE_DIR/stderr.log" || true
+        fi
         mark_for_delete "$final"
         notify "Auto-delete in $(( TTL_SECONDS / 60 )) min: $(basename "$final")"
         log "AI mode: $final will be deleted in ${TTL_SECONDS}s"

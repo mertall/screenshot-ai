@@ -46,7 +46,8 @@ The watcher is plain bash shelling out to `osascript` — nothing to compile, no
 ## 📦 Requirements
 
 - 🍎 macOS 12+ (uses `osascript`, `launchd`, `defaults`, `stat -f%z` — all stock)
-- 🚫 No external CLIs needed.
+- 🚫 No external CLIs needed for the core watcher.
+- 🦅 *Optional:* Xcode Command Line Tools (`swiftc`) to build the paste-on-cursor helper. Without it, Keep/Auto-delete still work.
 
 ## 🚀 Install
 
@@ -72,13 +73,22 @@ Take a screenshot the usual way:
 Then the dialog: 👇
 
 - 📌 **Keep** — behaves like a normal screenshot. Stays on the Desktop until you delete it.
-- 🗑️ **Auto-delete** *(default)* — stays long enough to drag/paste into your AI tool, then vanishes after `SCREENSHOT_AI_TTL` seconds (default 300 = 5 min).
+- 🗑️ **Auto-delete** *(default)* — the screenshot **jumps onto your cursor** 🖱️ — move it (no button held) over your AI tool's chat box, **click to paste it** ✨, or hit **Esc** to skip. Either way it then vanishes after `SCREENSHOT_AI_TTL` seconds (default 300 = 5 min).
+
+### 🖱️✨ Paste-on-cursor (the `cursorpaste` helper)
+
+When you pick **Auto-delete**, a small thumbnail of the screenshot sticks to your mouse pointer and follows it around — no button held. Move it wherever you want to use it and **click once** to drop it in (it copies the image to the clipboard and sends ⌘V into whatever you clicked), or press **Esc** to dismiss without pasting.
+
+This part is a tiny native Swift helper (`cursorpaste.swift`, built to `~/.screenshot-ai/bin/cursorpaste` by `install.sh`). It's **optional** — if Swift isn't available or the build fails, Keep/Auto-delete still work, you just don't get the floating paste.
+
+> 🔐 First time you use it, macOS will ask to grant **Accessibility** permission (needed to watch for the click/Esc and to send ⌘V). Approve it in System Settings → Privacy & Security → Accessibility.
 
 ## 🗂️ Files
 
 | Path | Purpose |
 | --- | --- |
 | `~/.screenshot-ai/bin/screenshot-ai.sh` | 👀 Watcher script (installed copy) |
+| `~/.screenshot-ai/bin/cursorpaste` | 🖱️ Paste-on-cursor helper (built from `cursorpaste.swift`, optional) |
 | `~/.screenshot-ai/pending/` | 🫥 Transient staging area (file lives here only between capture and dialog click) |
 | `~/.screenshot-ai/deletes.tsv` | ⏱️ Persisted auto-delete schedule (`<unix-time>\t<path>` per line) |
 | `~/.screenshot-ai/stdout.log`, `stderr.log` | 📝 LaunchAgent logs |
