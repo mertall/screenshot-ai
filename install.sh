@@ -15,17 +15,18 @@ echo "==> Installing watcher script..."
 cp "$WATCHER_SRC" "$WATCHER_DST"
 chmod +x "$WATCHER_DST"
 
-echo "==> Building cursor-paste helper (Swift, optional)..."
-if xcrun --find swiftc >/dev/null 2>&1; then
-    if xcrun swiftc -O -o "$BIN_DIR/cursorpaste" "$SCRIPT_DIR/cursorpaste.swift" 2>"$BASE_DIR/swiftc.log"; then
+echo "==> Building cursor-paste helper (native, optional)..."
+if xcrun --find clang >/dev/null 2>&1; then
+    if xcrun clang -fobjc-arc -O2 -framework Cocoa -framework ApplicationServices \
+        -o "$BIN_DIR/cursorpaste" "$SCRIPT_DIR/cursorpaste.m" 2>"$BASE_DIR/swiftc.log"; then
         echo "  built: $BIN_DIR/cursorpaste"
         echo "  NOTE: grant it Accessibility on first use (System Settings → Privacy & Security → Accessibility)."
     else
         rm -f "$BIN_DIR/cursorpaste"
-        echo "  WARN: swift build failed (see $BASE_DIR/swiftc.log) — paste-on-cursor disabled, Keep/Auto-delete still work."
+        echo "  WARN: helper build failed (see $BASE_DIR/swiftc.log) — paste-on-cursor disabled, Keep/Auto-delete still work."
     fi
 else
-    echo "  swiftc not found — paste-on-cursor disabled (install Xcode Command Line Tools to enable)."
+    echo "  clang not found — paste-on-cursor disabled (install Xcode Command Line Tools to enable)."
 fi
 
 echo "==> Redirecting macOS screenshot location to $PENDING_DIR..."
